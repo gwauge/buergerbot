@@ -1,7 +1,10 @@
 #!/usr/bin/env python
+import argparse
+import enum
 import time
 from datetime import date
 import os
+import json
 
 from playwright.sync_api import sync_playwright, ElementHandle
 
@@ -25,7 +28,189 @@ def grab_number_of_appointments(button: ElementHandle) -> int:
     raise Exception("No number of appointments found")
 
 
-def run(args: dict[str, any]):
+class FormOfAddress(enum.Enum):
+    M = "herr"
+    F = "frau"
+    BLANK = "x"
+    COMPANY = "firma"
+
+
+class PersonalData:
+    foa: FormOfAddress
+    first_name: str
+    last_name: str
+    phone: str
+    email: str
+
+
+class UserQuestions:
+    """
+    A class used to represent user questions and personal data.
+
+    Attributes
+    ----------
+    requests : dict[str, int]
+        A dictionary to store user requests with string keys and integer values.
+    personal_data : dict[str, any]
+        A dictionary to store personal data with string keys and values of any type.
+
+    Methods
+    -------
+    __init__():
+        Initializes the UserQuestions class with empty dictionaries for requests and personal_data.
+    """
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self.requests: dict[str, int] = {}
+        self.personal_data: PersonalData = PersonalData()
+
+        self.requests: dict[str, int] = {}
+
+        self.ask_personal_data()
+        self.ask_request_types()
+
+    def ask_personal_data(self):
+        while True:
+            if not args.no_interactive:
+                print("Please enter your personal data:")
+
+            # FOA
+            foa = (args.foa.value if args.foa else None) or os.getenv("FOA")
+            # check if form of address is valid
+            if args.no_interactive and (foa is None or foa == ""):
+                logger.error("--no-interactive requires a valid form of address. Please pass a valid form of address through the --foa argument or the FOA environment variable.")
+                raise SystemExit(1)
+            elif foa not in FormOfAddress._value2member_map_:
+                logger.error("Invalid form of address found in args or environment variable. Please enter a valid form of address.")
+                while True:
+                    foa = input("Form of address (herr, frau, x, firma): ")
+                    try:
+                        self.personal_data.foa = FormOfAddress._value2member_map_[foa]
+                        break
+                    except KeyError:
+                        logger.error("Invalid form of address. Please try again.")
+            else:
+                self.personal_data.foa = FormOfAddress._value2member_map_[foa]
+                print(f"Form of address: {foa}")
+
+            # first name
+            first_name = args.first_name or os.getenv("FIRST_NAME")
+            if args.no_interactive and (first_name is None or first_name == ""):
+                logger.error("--no-interactive requires a valid first name. Please pass a valid first name through the --first-name argument or the FIRST_NAME environment variable.")
+                raise SystemExit(1)
+            elif first_name is None or first_name == "":
+                while True:
+                    first_name = input("First name: ")
+                    if first_name:
+                        self.personal_data.first_name = first_name
+                        break
+                    else:
+                        logger.error("First name cannot be empty. Please try again.")
+            else:
+                self.personal_data.first_name = first_name
+                print(f"First name: {first_name}")
+
+            # last name
+            last_name = args.last_name or os.getenv("LAST_NAME")
+            if args.no_interactive and (last_name is None or last_name == ""):
+                logger.error("--no-interactive requires a valid last name. Please pass a valid last name through the --last-name argument or the LAST_NAME environment variable.")
+                raise SystemExit(1)
+            elif last_name is None or last_name == "":
+                while True:
+                    last_name = input("Last name: ")
+                    if last_name:
+                        self.personal_data.last_name = last_name
+                        break
+                    else:
+                        logger.error("Last name cannot be empty. Please try again.")
+            else:
+                self.personal_data.last_name = last_name
+                print(f"Last name: {last_name}")
+
+            # phone
+            phone = args.phone or os.getenv("PHONE")
+            if args.no_interactive and (phone is None or phone == ""):
+                logger.error("--no-interactive requires a valid phone number. Please pass a valid phone number through the --phone argument or the PHONE environment variable.")
+                raise SystemExit(1)
+            elif phone is None or phone == "":
+                while True:
+                    phone = input("Phone number: ")
+                    if phone:
+                        self.personal_data.phone = phone
+                        break
+                    else:
+                        logger.error("Phone number cannot be empty. Please try again.")
+            else:
+                self.personal_data.phone = phone
+                print(f"Phone number: {phone}")
+
+            # email
+            email = args.email or os.getenv("EMAIL")
+            if args.no_interactive and (email is None or email == ""):
+                logger.error("--no-interactive requires a valid email address. Please pass a valid email address through the --email argument or the EMAIL environment variable.")
+                raise SystemExit(1)
+            elif email is None or email == "":
+                while True:
+                    email = input("Email address: ")
+                    if email:
+                        self.personal_data.email = email
+                        break
+                    else:
+                        logger.error("Email address cannot be empty. Please try again.")
+            else:
+                self.personal_data.email = email
+                print(f"Email address: {email}")
+
+            if args.no_interactive or input("Is this correct? (y/n): ").lower() == "y":
+                break
+
+    def ask_request_types(self):
+        # if no interactive mode is enabled, use request types from arguments
+        if args.no_interactive:
+            if not args.request:
+                logger.error("No request types specified")
+                raise SystemExit(1)
+
+            for request_id, number in args.request:
+                self.requests[request_id] = int(number)
+
+        # if interactive mode is enabled, ask user for request types
+        else:
+            # read in request types from request-types.json
+            request_types: dict[str, str] = {}
+            with open("request-types.json", "r") as file:
+                request_types = json.load(file)
+
+            # ask user to select request type and number of people
+            while True:
+                while True:
+                    print("Please select the type of request you would like to add:")
+                    items = list(request_types.items())
+                    for i, (request_id, request_name) in enumerate(items):
+                        # skip already selected requests
+                        if request_id in self.requests:
+                            continue
+                        print(f"\t{i + 1:2}: {request_name}")
+
+                    while True:
+                        try:  # check if user input is valid
+                            selected_request = items[int(input("Enter the number of the request type: ")) - 1]
+                            selected_number = int(input("Enter the number of people: "))
+                            break
+                        except (ValueError, IndexError):
+                            logger.error("Invalid input. Please try again.")
+
+                    print(f"You have selected: '{selected_request[1]}' for {selected_number} people")
+
+                    if input("Is this correct? (y/n): ").lower() == "y":
+                        self.requests[selected_request[0]] = selected_number
+                        break
+
+                if input("Would you like to add another request? (y/n): ").lower() != "y":
+                    break
+
+
+def run(args: dict[str, any], user_questions: UserQuestions):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=args.headless)
@@ -40,7 +225,9 @@ def run(args: dict[str, any]):
         page.wait_for_load_state("networkidle")
 
         # Select type of appointment by setting number of people
-        page.select_option("select#id_1335352852", value="1")
+        # page.select_option("select#id_1335352852", value="1")
+        for request_id, number in user_questions.requests.items():
+            page.select_option(f"select#{request_id}", value=str(number))
 
         # Confirm and continue
         page.click("button#action_concernselect_next")
@@ -98,9 +285,17 @@ def run(args: dict[str, any]):
                                 # select the time
                                 time_select.select_option(value=value)
 
-                                # click continue button
+                                # click "Ok" button
                                 ok_button = page.query_selector("button:has-text('Ok')")
                                 ok_button.click()
+
+                                # enter personal data
+                                page.query_selector("input[name='anrede']").fill(user_questions.personal_data.foa.value)
+                                page.query_selector("input[name='vorname']").fill(user_questions.personal_data.first_name)
+                                page.query_selector("input[name='teleon']").fill(user_questions.personal_data.last_name)
+                                page.query_selector("input[name='email']").fill(user_questions.personal_data.email)
+
+                                # TODO: screenshot captcha
 
             # if not free_days:
             continue_button = page.query_selector("button:has-text('Vorwärts')")
@@ -129,8 +324,6 @@ def run(args: dict[str, any]):
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="Get appointment for Potsdam Bürgerservice")
 
     # run application headless
@@ -153,7 +346,13 @@ if __name__ == "__main__":
         "--minutes",
         type=int,
         default=5,
-        help="Recheck every x minutes"
+        help="Recheck every x minutes. Can be used with --seconds"
+    )
+    parser.add_argument(
+        "--seconds",
+        type=int,
+        default=0,
+        help="Recheck every x seconds. Can be used with --minutes"
     )
 
     parser.add_argument(
@@ -170,23 +369,69 @@ if __name__ == "__main__":
         help="Make application verbose"
     )
 
+    # skip questions
+    parser.add_argument(
+        "--no-interactive",
+        action="store_true",
+        default=False,
+        help="Skip all questions"
+    )
+
+    # specify personal data
+    parser.add_argument(
+        "--foa",
+        type=FormOfAddress,
+        help="Specify the form of address (herr, frau, x, firma). Required when using --no-interactive."
+    )
+    parser.add_argument(
+        "--first-name",
+        type=str,
+        help="Specify the first name. Required when using --no-interactive."
+    )
+    parser.add_argument(
+        "--last-name",
+        type=str,
+        help="Specify the last name. Required when using --no-interactive."
+    )
+    parser.add_argument(
+        "--phone",
+        type=str,
+        help="Specify the phone number. Required when using --no-interactive."
+    )
+    parser.add_argument(
+        "--email",
+        type=str,
+        help="Specify the email address. Required when using --no-interactive."
+    )
+
+    # specify request types
+    parser.add_argument(
+        "--request",
+        action="append",
+        nargs=2,
+        metavar=("ID", "NUMBER"),
+        help="Specify the request ID and number of people. Can be used multiple times. Required when using --no-interactive."
+    )
+
     args = parser.parse_args()
 
     if args.verbose:
         logger.setLevel("DEBUG")
 
     try:
+        user_questions = UserQuestions(args)
+        logger.debug("Selected request types: %s", user_questions.requests)
+
         if args.periodic:
             while True:
-                run(args)
+                run(args, user_questions)
                 logger.debug(
-                    "Sleeping for %d minute%s until next attempt",
+                    "Sleeping for %02d:%02dmin until next attempt",
                     args.minutes,
-                    "s" if args.minutes == 1 else "")
-                time.sleep(args.minutes * 60)
+                    args.seconds)
+                time.sleep(args.minutes * 60 + args.seconds)
         else:
-            run(args)
-            logger.debug("Done")
+            run(args, user_questions)
 
     except KeyboardInterrupt:
         logger.debug("Exiting...")

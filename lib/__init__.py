@@ -21,7 +21,7 @@ if not os.path.exists(".env"):
     exit(1)
 
 # Reads .env file in the current working directory
-load_dotenv(dotenv_path=".env")
+load_dotenv(dotenv_path=".env", override=True)
 
 LOGGER_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
