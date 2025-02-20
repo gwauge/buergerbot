@@ -1,0 +1,6 @@
+greenlet==3.1.1
+playwright==1.50.0
+pyee==12.1.1
+python-dotenv==1.0.1
+telegram-logging==1.0.0
+typing_extensions==4.12.2
