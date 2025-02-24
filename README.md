@@ -23,6 +23,15 @@ This script automatically books an appointment at the Bürgerservice Potsdam. It
 This script is provided as is and is intended for educational purposes only. Use at your own risk. The author is not responsible for any damage caused by the use of this script.
 
 ## Roadmap
+- [ ] Fix log levels to avoid memory issues
+  - [ ] Use logfile
+  - [ ] Only log INFO and higher to console
+  - [ ] Only log WARNING and higher to Telegram
 - [ ] Dockerize the project
 - [ ] Add support for earliest/latest booking date/time
+- [ ] Add support for detailed weekday/time selection, e.g. Wednesday 10:00-12:00, Thursday 14:00-16:00
+- [ ] Add `configuration.yaml` selecting the appointment type, earliest/latest booking date/time, detailed weekday/time selection and passing personal data
 - [ ] Convert to standalone Telegram bot, that accepts users requests and books appointments automatically
+
+## Contributing
+Feel free to contribute to this project by opening an issue or a pull request.

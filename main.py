@@ -254,10 +254,8 @@ def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
         page.click("button#action_concerncomments_next")
         page.wait_for_load_state("networkidle")
 
-        searching = True
-
         # click through months
-        while searching:
+        while not success:
             # grab monthtable0
             for table_name in ["monthtable0", "monthtable1"]:
                 monthtable = page.query_selector(f"table#{table_name}")
@@ -268,90 +266,95 @@ def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
 
                 # check for free days inside
                 free_days = monthtable.query_selector_all(".ekolCalendar_ButtonDayFreeX")
-                if not free_days:
-                    continue
 
-                free_day = free_days[0]  # select first free day
-                searching = False  # found free day, stop search
+                # free_day = free_days[0]  # select first free day
+                for free_day in free_days:
+                    # get day and number of appointments
+                    day = grab_day(free_day)
+                    free = grab_number_of_appointments(free_day)
+                    dates[parse_german_date(day, month_str, year)] = free
 
-                # get day and number of appointments
-                day = grab_day(free_day)
-                free = grab_number_of_appointments(free_day)
-                dates[parse_german_date(day, month_str, year)] = free
-
-                # log free day by using local date format: month, day year in local language
-                logger.debug("%s %d, %d: %d appointments available",
-                            month_str, day, year, free)
-
-                # book appointment
-                if args.disable_booking:
-                    continue
-
-                # click on the day
-                free_day.click()
-                page.wait_for_load_state("networkidle")
-
-                # Select the first available time slot
-                time_select = page.query_selector("#ekolcalendartimeselectbox")
-
-                # get first non empty option value
-                options = time_select.query_selector_all("option")
-                value = next(option.get_attribute("value") for option in options if option.get_attribute("value") != "")
-
-                # parse time from unix timestamp
-                timestamp = int(value)
-                time_str = time.strftime('%H:%M', time.localtime(timestamp / 1000))
-                logger.debug("Selecting first availale time: %s", time_str)
-
-                # select the time
-                time_select.select_option(value=value)
-
-                # click "Ok" button
-                ok_button = page.query_selector("button:has-text('Ok')")
-                ok_button.click()
-                page.wait_for_load_state("networkidle")
-
-                # while #cssconstants_captcha_image exists
-                while page.query_selector("#cssconstants_captcha_image"):
-
-                    # enter personal data
-                    page.query_selector("#anrede").select_option(value=user_questions.personal_data.foa.value)
-                    page.query_selector("input#vorname").fill(user_questions.personal_data.first_name)
-                    page.query_selector("input#nachname").fill(user_questions.personal_data.last_name)
-                    page.query_selector("input#telefon").fill(user_questions.personal_data.phone)
-                    page.query_selector("input#email").fill(user_questions.personal_data.email)
-
-                    # TODO: generate new captcha when receiving /new
-
-                    # create captacha screenshot
-                    captcha = page.locator("#cssconstants_captcha_image")
-                    captcha.wait_for(state="visible")
-                    image_bytes = captcha.screenshot()
-
-                    # wait for captcha to be solved
-                    future = asyncio.run_coroutine_threadsafe(telegram_send_photo(image_bytes), loop)
-                    captcha_answer = future.result()
-
-                    if not captcha_answer:
+                    # check if date is between earliest and latest date
+                    if args.earliest_date and parse_german_date(day, month_str, year) < args.earliest_date:
+                        # logger.debug("Skipping %s %d, %d as it is before the earliest date", month_str, day, year)
+                        continue
+                    if args.latest_date and parse_german_date(day, month_str, year) > args.latest_date:
+                        # logger.debug("Skipping %s %d, %d and later days", month_str, day, year)
                         break
 
-                    # enter captcha
-                    page.query_selector("#captcha_userinput").fill(captcha_answer)
+                    # log free day by using local date format: month, day year in local language
+                    logger.debug("%s %d, %d: %d appointments available",
+                                 month_str, day, year, free)
 
-                    page.wait_for_timeout(2 * 1000)  # TODO: remove
+                    # book appointment
+                    if args.disable_booking:
+                        continue
 
-                    # click "Weiter"
-                    page.query_selector("button#action_userdata_next").click()
+                    # click on the day
+                    free_day.click()
                     page.wait_for_load_state("networkidle")
 
-                # handle confirmation
-                page.query_selector("button#action_confirm_next").click()
-                page.wait_for_load_state("networkidle")
-                success = True
-                logger.info("Successfully booked appointment for %s %d, %d at %s",
-                            month_str, day, year, time_str)
+                    # Select the first available time slot
+                    time_select = page.query_selector("#ekolcalendartimeselectbox")
 
-            if searching:
+                    # get first non empty option value
+                    options = time_select.query_selector_all("option")
+                    value = next(option.get_attribute("value") for option in options if option.get_attribute("value") != "")
+
+                    # parse time from unix timestamp
+                    timestamp = int(value)
+                    time_str = time.strftime('%H:%M', time.localtime(timestamp / 1000))
+                    logger.debug("Selecting first availale time: %s", time_str)
+
+                    # select the time
+                    time_select.select_option(value=value)
+
+                    # click "Ok" button
+                    ok_button = page.query_selector("button:has-text('Ok')")
+                    ok_button.click()
+                    page.wait_for_load_state("networkidle")
+
+                    # while #cssconstants_captcha_image exists
+                    while page.query_selector("#cssconstants_captcha_image"):
+
+                        # enter personal data
+                        page.query_selector("#anrede").select_option(value=user_questions.personal_data.foa.value)
+                        page.query_selector("input#vorname").fill(user_questions.personal_data.first_name)
+                        page.query_selector("input#nachname").fill(user_questions.personal_data.last_name)
+                        page.query_selector("input#telefon").fill(user_questions.personal_data.phone)
+                        page.query_selector("input#email").fill(user_questions.personal_data.email)
+
+                        # TODO: generate new captcha when receiving /new
+
+                        # create captacha screenshot
+                        captcha = page.locator("#cssconstants_captcha_image")
+                        captcha.wait_for(state="visible")
+                        image_bytes = captcha.screenshot()
+
+                        # wait for captcha to be solved
+                        future = asyncio.run_coroutine_threadsafe(telegram_send_photo(image_bytes), loop)
+                        captcha_answer = future.result()
+
+                        if not captcha_answer:
+                            break
+
+                        # enter captcha
+                        page.query_selector("#captcha_userinput").fill(captcha_answer)
+
+                        page.wait_for_timeout(2 * 1000)  # TODO: remove
+
+                        # click "Weiter"
+                        page.query_selector("button#action_userdata_next").click()
+                        page.wait_for_load_state("networkidle")
+
+                    # handle confirmation
+                    page.query_selector("button#action_confirm_next").click()
+                    page.wait_for_load_state("networkidle")
+                    success = True
+                    logger.info("Successfully booked appointment for %s %d, %d at %s",
+                                month_str, day, year, time_str)
+
+            if not success:
                 continue_button = page.query_selector("button:has-text('Vorwärts')")
                 if not continue_button:
                     logger.error("No 'Vorwärts' button found")
@@ -471,6 +474,20 @@ if __name__ == "__main__":
         nargs=2,
         metavar=("ID", "NUMBER"),
         help="Specify the request ID and number of people. Can be used multiple times. Required when using --no-interactive."
+    )
+
+    # specify the earliest date
+    parser.add_argument(
+        "--earliest-date",
+        type=lambda s: date.fromisoformat(s),
+        help="Specify the earliest date for appointments in YYYY-MM-DD format. Appointments before this date will be skipped."
+    )
+
+    # specify the latest date
+    parser.add_argument(
+        "--latest-date",
+        type=lambda s: date.fromisoformat(s),
+        help="Specify the latest date for appointments in YYYY-MM-DD format. Appointments after this date will be skipped."
     )
 
     args = parser.parse_args()
