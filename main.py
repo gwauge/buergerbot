@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 import argparse
 import enum
+import threading
 import time
 from datetime import date
 import os
 import json
+import asyncio
 
 from playwright.sync_api import sync_playwright, ElementHandle
 
-from lib import logger, parse_german_date
+from lib import logger, parse_german_date, telegram_send_photo
 
 URL = "https://egov.potsdam.de/tnv/?START_OFFICE=buergerservice"
 dates: dict[date, int] = {}
@@ -210,7 +212,22 @@ class UserQuestions:
                     break
 
 
-def run(args: dict[str, any], user_questions: UserQuestions):
+# Start a separate event loop in a background thread
+def start_event_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+
+def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
+
+    # Create a new event loop for the thread
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=start_event_loop, args=(loop,), daemon=True)
+    thread.start()
+
+    success = False
+
+    # TODO: check if internet connection is available
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=args.headless)
@@ -251,76 +268,111 @@ def run(args: dict[str, any], user_questions: UserQuestions):
 
                 # check for free days inside
                 free_days = monthtable.query_selector_all(".ekolCalendar_ButtonDayFreeX")
-                if free_days:
-                    for free_day in free_days:
-                        searching = False
+                if not free_days:
+                    continue
 
-                        day = grab_day(free_day)
-                        free = grab_number_of_appointments(free_day)
-                        dates[parse_german_date(day, month_str, year)] = free
+                free_day = free_days[0]  # select first free day
+                searching = False  # found free day, stop search
 
-                        # log free day by using local date format: month, day year in local language
-                        logger.info("%s %d, %d: %d appointments available",
-                                    month_str, day, year, free)
+                # get day and number of appointments
+                day = grab_day(free_day)
+                free = grab_number_of_appointments(free_day)
+                dates[parse_german_date(day, month_str, year)] = free
 
-                        # book appointment
-                        if args.disable_booking:
-                            continue
+                # log free day by using local date format: month, day year in local language
+                logger.debug("%s %d, %d: %d appointments available",
+                            month_str, day, year, free)
 
-                        # click on the day
-                        free_day.click()
-                        page.wait_for_load_state("networkidle")
+                # book appointment
+                if args.disable_booking:
+                    continue
 
-                        # Select the first available time slot
-                        time_select = page.query_selector("#ekolcalendartimeselectbox")
-                        options = time_select.query_selector_all("option")
-                        for option in options:
-                            value = option.get_attribute("value")
-                            if value != "":
-                                # parse time from unix timestamp
-                                timestamp = int(value)
-                                time_str = time.strftime('%H:%M', time.localtime(timestamp / 1000))
-                                logger.info("Selecting first availale time: %s", time_str)
+                # click on the day
+                free_day.click()
+                page.wait_for_load_state("networkidle")
 
-                                # select the time
-                                time_select.select_option(value=value)
+                # Select the first available time slot
+                time_select = page.query_selector("#ekolcalendartimeselectbox")
 
-                                # click "Ok" button
-                                ok_button = page.query_selector("button:has-text('Ok')")
-                                ok_button.click()
+                # get first non empty option value
+                options = time_select.query_selector_all("option")
+                value = next(option.get_attribute("value") for option in options if option.get_attribute("value") != "")
 
-                                # enter personal data
-                                page.query_selector("input[name='anrede']").fill(user_questions.personal_data.foa.value)
-                                page.query_selector("input[name='vorname']").fill(user_questions.personal_data.first_name)
-                                page.query_selector("input[name='teleon']").fill(user_questions.personal_data.last_name)
-                                page.query_selector("input[name='email']").fill(user_questions.personal_data.email)
+                # parse time from unix timestamp
+                timestamp = int(value)
+                time_str = time.strftime('%H:%M', time.localtime(timestamp / 1000))
+                logger.debug("Selecting first availale time: %s", time_str)
 
-                                # TODO: screenshot captcha
+                # select the time
+                time_select.select_option(value=value)
 
-            # if not free_days:
-            continue_button = page.query_selector("button:has-text('Vorwärts')")
-            if not continue_button:
-                logger.error("No 'Vorwärts' button found")
-                break
+                # click "Ok" button
+                ok_button = page.query_selector("button:has-text('Ok')")
+                ok_button.click()
+                page.wait_for_load_state("networkidle")
 
-            # check if button is disabled
-            if continue_button.get_attribute("disabled") is not None:
-                break
+                # while #cssconstants_captcha_image exists
+                while page.query_selector("#cssconstants_captcha_image"):
 
-            continue_button.click()
-            page.wait_for_load_state("networkidle")
+                    # enter personal data
+                    page.query_selector("#anrede").select_option(value=user_questions.personal_data.foa.value)
+                    page.query_selector("input#vorname").fill(user_questions.personal_data.first_name)
+                    page.query_selector("input#nachname").fill(user_questions.personal_data.last_name)
+                    page.query_selector("input#telefon").fill(user_questions.personal_data.phone)
+                    page.query_selector("input#email").fill(user_questions.personal_data.email)
+
+                    # TODO: generate new captcha when receiving /new
+
+                    # create captacha screenshot
+                    captcha = page.locator("#cssconstants_captcha_image")
+                    captcha.wait_for(state="visible")
+                    image_bytes = captcha.screenshot()
+
+                    # wait for captcha to be solved
+                    future = asyncio.run_coroutine_threadsafe(telegram_send_photo(image_bytes), loop)
+                    captcha_answer = future.result()
+
+                    if not captcha_answer:
+                        break
+
+                    # enter captcha
+                    page.query_selector("#captcha_userinput").fill(captcha_answer)
+
+                    page.wait_for_timeout(2 * 1000)  # TODO: remove
+
+                    # click "Weiter"
+                    page.query_selector("button#action_userdata_next").click()
+                    page.wait_for_load_state("networkidle")
+
+                # handle confirmation
+                page.query_selector("button#action_confirm_next").click()
+                page.wait_for_load_state("networkidle")
+                success = True
+                logger.info("Successfully booked appointment for %s %d, %d at %s",
+                            month_str, day, year, time_str)
+
+            if searching:
+                continue_button = page.query_selector("button:has-text('Vorwärts')")
+                if not continue_button:
+                    logger.error("No 'Vorwärts' button found")
+                    break
+
+                # check if button is disabled
+                if continue_button.get_attribute("disabled") is not None:
+                    break
+
+                continue_button.click()
+                page.wait_for_load_state("networkidle")
 
         browser.close()
         p.stop()
 
-        # if there is an appointment available, send url
-        if dates:
-            logger.info("Book via: %s", URL)
+    # Clean up the event loop thread (optional)
+    loop.call_soon_threadsafe(loop.stop)
+    thread.join()
+    loop.close()
 
-    # TODO: fix
-    # hacky way to force application to shut down
-    if not args.periodic:
-        raise ZeroDivisionError("done")
+    return success
 
 
 if __name__ == "__main__":
@@ -339,6 +391,14 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Run the application periodically"
+    )
+
+    # add maximum tries
+    parser.add_argument(
+        "--tries",
+        type=int,
+        default=0,
+        help="Maximum number of tries. 0 for infinite."
     )
 
     # control period of time to check
@@ -418,15 +478,19 @@ if __name__ == "__main__":
     if args.verbose:
         logger.setLevel("DEBUG")
 
+    # logger.info("Book via: %s", URL)
     try:
         user_questions = UserQuestions(args)
         logger.debug("Selected request types: %s", user_questions.requests)
 
         if args.periodic:
-            while True:
-                run(args, user_questions)
+            tries = 0
+
+            while not run(args, user_questions) and (args.tries == 0 or tries < args.tries):
+                tries += 1
                 logger.debug(
-                    "Sleeping for %02d:%02dmin until next attempt",
+                    "[Attempt %d] Unsuccessful. Sleeping for %02d:%02d minutes until next attempt.",
+                    tries,
                     args.minutes,
                     args.seconds)
                 time.sleep(args.minutes * 60 + args.seconds)

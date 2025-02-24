@@ -1,8 +1,13 @@
 import os
 import logging
 from datetime import date
+import asyncio
+import time
+
 from dotenv import load_dotenv
 from telegram_logging import TelegramFormatter, TelegramHandler
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 # Mapping of German month names to numbers
 GERMAN_MONTHS_DICT = {
@@ -70,3 +75,53 @@ def setup_custom_logger(
 
 
 logger = setup_custom_logger()
+
+
+async def telegram_send_photo(
+    image_bytes: bytes,
+    caption: str = "Please solve the captcha and reply with the answer."
+) -> str | None:
+    """ Send to Telegram using the Bot API """
+
+    if not ENABLE_TELEGRAM:
+        logger.warning("Telegram is not enabled")
+        return
+
+    # Initialize the bot with your token
+    application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    await application.initialize()
+    await application.start()
+
+    # Send the photo
+    await application.bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=image_bytes, caption=caption)
+    # await application.bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=caption)
+
+    captcha_answer: str | None = None
+
+    async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        nonlocal captcha_answer
+        captcha_answer = update.message.text
+        logger.debug(f"Received captcha answer: {captcha_answer}")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    await application.updater.start_polling()
+
+    start_time = time.time()
+
+    # Wait for the captcha answer or timeout after 4 minutes and 30 seconds
+    while captcha_answer is None and time.time() - start_time < (4 * 60 + 30):
+        await asyncio.sleep(0.5)
+
+    # captch was not answered in time
+    if captcha_answer is None:
+        logger.warning("Captcha answer not received in time")
+
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+
+    return captcha_answer
