@@ -14,11 +14,11 @@ This script is provided as is and is intended for educational purposes only. Use
   ```bash
   docker build -t buergerbot .
   ```
-1. Copy `.env.example` to `.env` and fill in the required information, specifically:
+3. Copy `.env.example` to `.env` and fill in the required information, specifically:
    - `TELEGRAM_TOKEN`: Your Telegram bot token
    - `TELEGRAM_CHAT_ID`: Your Telegram chat ID
-2. Copy `config.yaml.example` to `config.yaml`. See `config.yaml.example` for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
-3. Run the Docker container:
+4. Copy `config.yaml.example` to `config.yaml`. See `config.yaml.example` for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
+5. Run the Docker container:
   ```bash
   docker run \
     -it --rm \
@@ -36,7 +36,6 @@ See `requirements.txt` for a list of required packages.
 1. Clone the repository
 2. Run `install.sh` to create a virtual environment and install the required packages
 3. Copy `.env.example` to `.env` and fill in the required information
-4. Run `uninstall.sh` to remove the virtual environment and uninstall playwright.
 
 ### Usage
 1. Run `source venv/bin/activate` to activate the virtual environment
