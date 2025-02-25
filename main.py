@@ -9,8 +9,10 @@ import json
 import asyncio
 
 from playwright.sync_api import sync_playwright, ElementHandle
+import yaml
+from cerberus import Validator
 
-from lib import logger, parse_german_date, telegram_send_photo
+from lib import logger, parse_german_date, telegram_send_photo, config_schema
 
 URL = "https://egov.potsdam.de/tnv/?START_OFFICE=buergerservice"
 dates: dict[date, int] = {}
@@ -45,9 +47,9 @@ class PersonalData:
     email: str
 
 
-class UserQuestions:
+class Configuration:
     """
-    A class used to represent user questions and personal data.
+    A class used to represent the configuration of the bot.
 
     Attributes
     ----------
@@ -55,21 +57,42 @@ class UserQuestions:
         A dictionary to store user requests with string keys and integer values.
     personal_data : dict[str, any]
         A dictionary to store personal data with string keys and values of any type.
+    earliest_date : date | None
+        The earliest date for appointments.
+    latest_date : date | None
+        The latest date for appointments.
+    exclude_dates : list[date]
+        A list of dates to exclude from the search.
+    weekdays : dict[str, list[dict[str, str]]]
+        A dictionary to store the available time slots for each
+        weekday with string keys and lists of dictionaries
+        with string keys and values.
 
     Methods
     -------
     __init__():
-        Initializes the UserQuestions class with empty dictionaries for requests and personal_data.
+        Initializes the Configuration class.
     """
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.requests: dict[str, int] = {}
         self.personal_data: PersonalData = PersonalData()
+        self.earliest_date: date | None = args.earliest_date
+        self.latest_date: date | None = args.earliest_date
+        self.exclude_dates: list[date] = []
+        self.weekdays: dict[str, list[dict[str, str]]] = {}
+
+        self.periodic = args.periodic
+        self.minutes = args.minutes
+        self.seconds = args.seconds
 
         self.requests: dict[str, int] = {}
 
-        self.ask_personal_data()
-        self.ask_request_types()
+        if args.no_interactive and args.config:
+            self.parse_config()
+        else:
+            self.ask_personal_data()
+            self.ask_request_types()
 
     def ask_personal_data(self):
         while True:
@@ -211,6 +234,80 @@ class UserQuestions:
                 if input("Would you like to add another request? (y/n): ").lower() != "y":
                     break
 
+    def parse_config(self):
+        if not os.path.exists(args.config):
+            logger.error("Config file not found")
+            raise SystemExit(1)
+
+        with open(args.config, "r") as file:
+            config_dict = yaml.safe_load(file)
+
+        validator = Validator(config_schema)
+        config = validator.validated(config_dict)
+        if not config:
+            logger.error(
+                "The configuration file contains errors:\n%s",
+                json.dumps(validator.errors, indent=4))
+            exit(1)
+
+        if config.get("periodic"):
+            self.periodic = True
+            self.minutes = int(config["periodic"].split(":")[-2])
+            self.seconds = int(config["periodic"].split(":")[-1])
+
+        self.personal_data.foa = FormOfAddress._value2member_map_[config["personal_data"]["foa"]]
+        self.personal_data.first_name = config["personal_data"]["first_name"]
+        self.personal_data.last_name = config["personal_data"]["last_name"]
+        self.personal_data.phone = config["personal_data"]["phone"]
+        self.personal_data.email = config["personal_data"]["email"]
+
+        for request in config["requests"]:
+            self.requests[request["id"]] = request["number_of_people"]
+
+        for weekday, times in config["weekdays"].items():
+            # select whole day if empty
+            if not times:
+                self.weekdays[weekday] = [{"from": "00:00", "to": "23:59"}]
+            else:
+                self.weekdays[weekday] = times
+
+        if config.get("dates"):
+            if config["dates"].get("earliest"):
+                self.earliest_date = date.fromisoformat(config["dates"]["earliest"])
+            if config["dates"].get("latest"):
+                self.latest_date = date.fromisoformat(config["dates"]["latest"])
+
+            if config["dates"].get("exclude"):
+                self.exclude_dates = [date.fromisoformat(d) for d in config["dates"]["exclude"]]
+
+    def __str__(self):
+        s = ""
+        if self.periodic:
+            s += "Periodic: {}\n".format(self.periodic)
+
+        s += "Personal data:\n\tFOA: {}\n\tFirst name: {}\n\tLast name: {}\n\tPhone: {}\n\tEmail: {}\n".format(
+            self.personal_data.foa.value,
+            self.personal_data.first_name,
+            self.personal_data.last_name,
+            self.personal_data.phone,
+            self.personal_data.email)
+
+        s += "\nRequests:\n"
+        for request_id, number in self.requests.items():
+            s += f"\t{request_id}: {number}\n"
+
+        s += "\nWeekdays:\n"
+        for weekday, times in self.weekdays.items():
+            s += f"\t{weekday}: {times}\n"
+
+        s += "\nEarliest date: {}\nLatest date: {}\n".format(self.earliest_date, self.latest_date)
+
+        s += "\nExcluded dates:\n"
+        for d in self.exclude_dates:
+            s += f"\t{d}\n"
+
+        return s
+
 
 # Start a separate event loop in a background thread
 def start_event_loop(loop):
@@ -218,7 +315,7 @@ def start_event_loop(loop):
     loop.run_forever()
 
 
-def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
+def run(args: dict[str, any], config: Configuration) -> bool:
 
     # Create a new event loop for the thread
     loop = asyncio.new_event_loop()
@@ -243,7 +340,7 @@ def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
 
         # Select type of appointment by setting number of people
         # page.select_option("select#id_1335352852", value="1")
-        for request_id, number in user_questions.requests.items():
+        for request_id, number in config.requests.items():
             page.select_option(f"select#{request_id}", value=str(number))
 
         # Confirm and continue
@@ -272,15 +369,22 @@ def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
                     # get day and number of appointments
                     day = grab_day(free_day)
                     free = grab_number_of_appointments(free_day)
-                    dates[parse_german_date(day, month_str, year)] = free
+                    parsed_date = parse_german_date(day, month_str, year)
+                    dates[parsed_date] = free
 
                     # check if date is between earliest and latest date
-                    if args.earliest_date and parse_german_date(day, month_str, year) < args.earliest_date:
+                    if config.earliest_date and parsed_date < config.earliest_date:
                         # logger.debug("Skipping %s %d, %d as it is before the earliest date", month_str, day, year)
                         continue
-                    if args.latest_date and parse_german_date(day, month_str, year) > args.latest_date:
+                    if config.latest_date and parsed_date > config.latest_date:
                         # logger.debug("Skipping %s %d, %d and later days", month_str, day, year)
                         break
+
+                    if parsed_date in config.exclude_dates:
+                        break
+
+                    # get weekday from parsed_date in lower case
+                    weekday = parsed_date.strftime("%A").lower()
 
                     # log free day by using local date format: month, day year in local language
                     logger.debug("%s %d, %d: %d appointments available",
@@ -297,14 +401,27 @@ def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
                     # Select the first available time slot
                     time_select = page.query_selector("#ekolcalendartimeselectbox")
 
-                    # get first non empty option value
+                    # find first time slot, which satiesfies the requirements
                     options = time_select.query_selector_all("option")
-                    value = next(option.get_attribute("value") for option in options if option.get_attribute("value") != "")
+                    value = None
+                    for option in options:
+                        option_value = option.get_attribute("value")
+                        if option_value:
+                            option_time = time.strftime('%H:%M', time.localtime(int(option_value) / 1000))
+                            for time_slot in config.weekdays[weekday]:
+                                if time_slot["from"] <= option_time <= time_slot["to"]:
+                                    value = option_value
+                                    break
+                        if value:
+                            break
+                    if not value:
+                        logger.error("No suitable time slot found for %s %d, %d", month_str, day, year)
+                        continue
 
                     # parse time from unix timestamp
-                    timestamp = int(value)
-                    time_str = time.strftime('%H:%M', time.localtime(timestamp / 1000))
-                    logger.debug("Selecting first availale time: %s", time_str)
+                    time_str = time.strftime('%H:%M', time.localtime(int(value) / 1000))
+                    logger.warning("Booking appointment for %s %d, %d at %s",
+                                   month_str, day, year, time_str)
 
                     # select the time
                     time_select.select_option(value=value)
@@ -318,13 +435,11 @@ def run(args: dict[str, any], user_questions: UserQuestions) -> bool:
                     while page.query_selector("#cssconstants_captcha_image"):
 
                         # enter personal data
-                        page.query_selector("#anrede").select_option(value=user_questions.personal_data.foa.value)
-                        page.query_selector("input#vorname").fill(user_questions.personal_data.first_name)
-                        page.query_selector("input#nachname").fill(user_questions.personal_data.last_name)
-                        page.query_selector("input#telefon").fill(user_questions.personal_data.phone)
-                        page.query_selector("input#email").fill(user_questions.personal_data.email)
-
-                        # TODO: generate new captcha when receiving /new
+                        page.query_selector("#anrede").select_option(value=config.personal_data.foa.value)
+                        page.query_selector("input#vorname").fill(config.personal_data.first_name)
+                        page.query_selector("input#nachname").fill(config.personal_data.last_name)
+                        page.query_selector("input#telefon").fill(config.personal_data.phone)
+                        page.query_selector("input#email").fill(config.personal_data.email)
 
                         # create captacha screenshot
                         captcha = page.locator("#cssconstants_captcha_image")
@@ -389,6 +504,7 @@ if __name__ == "__main__":
         help="Run the application headless. Overwrites environment variable HEADLESS."
     )
 
+    # make periodic
     parser.add_argument(
         "--periodic",
         action="store_true",
@@ -438,6 +554,13 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Skip all questions"
+    )
+
+    # specify config file
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="Specify path to a YAML config file. Requires --no-interactive."
     )
 
     # specify personal data
@@ -495,26 +618,23 @@ if __name__ == "__main__":
     if args.verbose:
         logger.setLevel("DEBUG")
 
-    # logger.info("Book via: %s", URL)
     try:
-        user_questions = UserQuestions(args)
-        logger.debug("Selected request types: %s", user_questions.requests)
+        config = Configuration(args)
+        logger.debug("Configuration:\n%s", config)
 
-        if args.periodic:
+        if config.periodic:
             tries = 0
 
-            while not run(args, user_questions) and (args.tries == 0 or tries < args.tries):
+            while not run(args, config) and (args.tries == 0 or tries < args.tries):
                 tries += 1
                 logger.debug(
                     "[Attempt %d] Unsuccessful. Sleeping for %02d:%02d minutes until next attempt.",
                     tries,
-                    args.minutes,
-                    args.seconds)
-                time.sleep(args.minutes * 60 + args.seconds)
+                    config.minutes,
+                    config.seconds)
+                time.sleep(config.minutes * 60 + config.seconds)
         else:
-            run(args, user_questions)
+            run(args, config)
 
     except KeyboardInterrupt:
         logger.debug("Exiting...")
-    except ZeroDivisionError:
-        pass

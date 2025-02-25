@@ -2,35 +2,95 @@
 
 This script automatically books an appointment at the Bürgerservice Potsdam. It uses the Playwright headless browser automation library to (periodically) check for available appointments and book one as soon as it is available. Since booking requires solving a captcha, it sends a screenshot of the captcha to the user via Telegram. The user then has about 5 minutes to solve the captcha and send the solution back to the bot. The bot will then automatically fill out the form and book the appointment.
 
+## Disclaimer
+This script is provided as is and is intended for educational purposes only. Use at your own risk. The author is not responsible for any damage caused by the use of this script.
+
 ## Requirements
 - Telegram bot token (see [here](https://core.telegram.org/bots#6-botfather))
-- Python venv >= 3.12
 
-## Installation
+## Use with Docker (recommended)
+1. Clone the repository
+2. Build the Docker image:
+  ```bash
+  docker build -t buergerbot .
+  ```
+1. Copy `.env.example` to `.env` and fill in the required information, specifically:
+   - `TELEGRAM_TOKEN`: Your Telegram bot token
+   - `TELEGRAM_CHAT_ID`: Your Telegram chat ID
+2. Copy `config.yaml.example` to `config.yaml`. See `config.yaml.example` for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
+3. Run the Docker container:
+  ```bash
+  docker run \
+    -it --rm \
+    --env-file .env \
+    -v ./config.yaml:/app/config.yaml \
+    buergerbot
+  ```
+  It is important to pass the `.env` and `config.yaml` files to the containerm as they contain the necessary configuration and it won't run properly without them.
+
+## Use without Docker
+### Dependencies
+See `requirements.txt` for a list of required packages.
+
+### Installation
 1. Clone the repository
 2. Run `install.sh` to create a virtual environment and install the required packages
 3. Copy `.env.example` to `.env` and fill in the required information
 4. Run `uninstall.sh` to remove the virtual environment and uninstall playwright.
 
-## Usage
+### Usage
 1. Run `source venv/bin/activate` to activate the virtual environment
 2. Run `./main.py` to start the script. See `./main.py --help` for available options.
    - `--periodic`: Will periodically check for appointments.
    - `--minutes` & `--seconds`: Control period between checks.
    - `--request {REQUEST_ID} {NUM}`: Use in combination with `--no-interactive` to book an appointment without user interaction. See `request-types.json` for possible request types.
 
-## Disclaimer
-This script is provided as is and is intended for educational purposes only. Use at your own risk. The author is not responsible for any damage caused by the use of this script.
+## Configuration
+An example configuration file is provided in `config.yaml.example`.
+
+### Periodic
+Can be set by providing a time interval in the format `MM:SS`. The script will then check for available appointments every `MM` minutes and `SS` seconds.
+
+### Personal data
+The following personal data is required to book an appointment:
+- `first_name`: Your first name
+- `last_name`: Your last name
+- `email`: Your email address
+- `phone`: Your phone number
+- `foa`: Your form of address. Possible values are `herr`, `frau`, or `firma`.
+
+### Request types
+A single appointment can contain multiple request types. The `request_types` section should contain a list of these types.
+
+Each request type should contain the following field:
+- `id`: The request type ID. This can be found by inspecting the website.
+
+Optionally, a request type can also contain the following field:
+- `number_of_people`: The number of people for this request type. Default is 1.
+
+### Weekdays
+The `weekdays` section should contain a key for each weekday that you would like to specify availability for. Each availability entry should contain the following keys:
+- `from`: The start time of the availability in the format `HH:MM`.
+- `to`: The end time of the availability in the format `HH:MM`.
+
+All other times during that time are considered unavailable.
+If a weekday is not specified, the script will assume that you are available all day.
+
+### Dates
+Inside the `dates` section, you can optionally specify a list of dates to be excluded in the format `YYYY-MM-DD` under the key `exclude`.
+Further, you can specify `earliest` and `latest` dates to book an appointment. If these are not specified, the script will book the first available appointment, that fits the specified requirements.
 
 ## Roadmap
 - [ ] Fix log levels to avoid memory issues
   - [ ] Use logfile
   - [ ] Only log INFO and higher to console
   - [ ] Only log WARNING and higher to Telegram
-- [ ] Dockerize the project
-- [ ] Add support for earliest/latest booking date/time
-- [ ] Add support for detailed weekday/time selection, e.g. Wednesday 10:00-12:00, Thursday 14:00-16:00
-- [ ] Add `configuration.yaml` selecting the appointment type, earliest/latest booking date/time, detailed weekday/time selection and passing personal data
+- [x] Dockerize the project
+- [x] Add support for earliest/latest booking date/time
+- [x] Add support for detailed weekday/time selection, e.g. Wednesday 10:00-12:00, Thursday 14:00-16:00
+- [x] Add `configuration.yaml` selecting the appointment type, earliest/latest booking date/time, detailed weekday/time selection and passing personal data
+- [ ] Automatically build and push Docker image to Docker Hub
+- [ ] Add Docker compose example
 - [ ] Convert to standalone Telegram bot, that accepts users requests and books appointments automatically
 
 ## Contributing

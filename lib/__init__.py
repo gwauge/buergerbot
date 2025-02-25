@@ -22,11 +22,10 @@ def parse_german_date(day: int, month: str, year: int) -> date:
 
 # check if .env file exists
 if not os.path.exists(".env"):
-    print("No .env file found")
-    exit(1)
-
-# Reads .env file in the current working directory
-load_dotenv(dotenv_path=".env", override=True)
+    print("No .env file found in the current working directory. Relying on environment variables.")
+else:
+    # Reads .env file in the current working directory
+    load_dotenv(dotenv_path=".env", override=True)
 
 LOGGER_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -125,3 +124,124 @@ async def telegram_send_photo(
         await application.shutdown()
 
     return captcha_answer
+
+
+DATE_FORMAT_REGEX = r"^\d{4}-\d{2}-\d{2}$"
+TIME_FORMAT_REGEX = "^[0-2][0-9]:[0-5][0-9]$"  # 24-hour format
+config_schema = {
+    "periodic": {
+        "type": "string",
+        "regex": TIME_FORMAT_REGEX
+    },
+    "personal_data": {
+        "type": "dict",
+        "schema": {
+            "foa": {
+                "type": "string",
+                "allowed": ["herr", "frau", "firma"],
+                "required": True
+            },
+            "first_name": {"type": "string", "required": True},
+            "last_name": {"type": "string", "required": True},
+            "phone": {"type": "string", "required": True},
+            "email": {"type": "string", "required": True},
+        }
+    },
+    "requests": {
+        "type": "list",
+        "schema": {
+            "type": "dict",
+            "schema": {
+                "id": {"type": "string", "required": True},
+                "number_of_people": {"type": "integer", "default": 1, "coerce": int},
+            },
+        },
+    },
+    "weekdays": {
+        "type": "dict",
+        "schema": {
+            "monday": {
+                "type": "list",
+                "schema": {
+                    "type": "dict",
+                    "schema": {
+                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    },
+                },
+                "default": []
+            },
+            "tuesday": {
+                "type": "list",
+                "schema": {
+                    "type": "dict",
+                    "schema": {
+                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    },
+                },
+                "default": []
+            },
+            "wednesday": {
+                "type": "list",
+                "schema": {
+                    "type": "dict",
+                    "schema": {
+                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    },
+                },
+                "default": []
+            },
+            "thursday": {
+                "type": "list",
+                "schema": {
+                    "type": "dict",
+                    "schema": {
+                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    },
+                },
+                "default": []
+            },
+            "friday": {
+                "type": "list",
+                "schema": {
+                    "type": "dict",
+                    "schema": {
+                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    },
+                },
+                "default": []
+            },
+            "saturday": {
+                "type": "list",
+                "schema": {
+                    "type": "dict",
+                    "schema": {
+                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    },
+                },
+                "default": []
+            }
+        }
+    },
+    "dates": {
+        "type": "dict",
+        "schema": {
+            "earliest": {"type": "string", "regex": DATE_FORMAT_REGEX, "required": False},
+            "latest": {"type": "string", "regex": DATE_FORMAT_REGEX, "required": False},
+            "exclude": {
+                "type": "list",
+                "schema": {
+                    "type": "string",
+                    "regex": DATE_FORMAT_REGEX
+                },
+                "required": False,
+                "default": []
+            }
+        }
+    }
+}

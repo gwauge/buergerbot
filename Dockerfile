@@ -16,4 +16,4 @@ RUN pip install playwright && \
 # Copy project files
 COPY . /app
 
-CMD ["python", "main.py"]
+CMD ["python", "main.py", "--no-interactive", "--config", "config.yaml"]

@@ -1,0 +1,28 @@
+periodic: 01:00
+
+personal_data:
+  foa: frau
+  first_name: Jane
+  last_name: Doe
+  phone: 01234567890
+  email: mail@example.com
+
+requests:
+  - id: id_1337592281
+
+weekdays:
+  monday:
+    - from: "08:00"
+      to: "16:00"
+    - from: "17:00"
+      to: "20:00"
+  wednesday:
+    - from: "10:00"
+      to: "12:00"
+
+dates:
+  earliest: "2025-02-28"
+  latest: "2025-05-15"
+  exclude:
+    - "2025-03-14"
+    - "2025-04-22"
