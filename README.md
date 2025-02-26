@@ -19,6 +19,18 @@ This script is provided as is and is intended for educational purposes only. Use
   docker compose up
   ```
 
+### Use pre-built image
+1. Create a `config.yaml` file. See [config.yaml.example](config.yaml.example) for an example and [Configuration](#configuration) for a detailed explanation of the configuration options.
+2. Run image:
+  ```bash
+  docker run \
+    -it --rm \
+    -e TELEGRAM_TOKEN=YOUR_TELEGRAM
+    -e TELEGRAM_CHAT_ID=YOUR_CHAT_ID
+    -v ./config.yaml:/app/config.yaml \
+    ghcr.io/gwauge/buergerbot:latest
+  ```
+
 ### Build image manually
 1. Clone the repository
 2. Build the Docker image:
@@ -98,10 +110,9 @@ Further, you can specify `earliest` and `latest` dates to book an appointment. I
 - [x] Dockerize the project
 - [x] Add support for earliest/latest booking date/time
 - [x] Add support for detailed weekday/time selection, e.g. Wednesday 10:00-12:00, Thursday 14:00-16:00
-- [x] Add `configuration.yaml` selecting the appointment type, earliest/latest booking date/time, detailed weekday/time selection and passing personal data
-- [ ] Automatically build and push Docker image to Docker Hub
-- [ ] Add Docker compose example
-- [ ] Convert to standalone Telegram bot, that accepts users requests and books appointments automatically
+- [x] Add `configuration.yaml` for selecting the appointment type, earliest/latest booking date/time, detailed weekday/time selection and passing personal data
+- [x] Automatically build and push Docker image to Docker Hub & GHCR
+- [x] Add Docker compose example
 
 ## Contributing
 Feel free to contribute to this project by opening an issue or a pull request.

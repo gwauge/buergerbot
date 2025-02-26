@@ -4,7 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: buergerbot:latest
+    image: ghcr.io/gwauge/buergerbot:latest # GitHub Container Registry image
+    # image: buergerbot:latest # Docker Hub image
     environment:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
