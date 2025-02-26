@@ -327,7 +327,7 @@ def run(args: dict[str, any], config: Configuration) -> bool:
     # TODO: check if internet connection is available
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=args.headless)
+        browser = p.chromium.launch(channel="chromium", headless=args.headless)
         context = browser.new_context()
         page = context.new_page()
 

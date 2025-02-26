@@ -11,9 +11,14 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Install Playwright browsers
 RUN pip install playwright && \
-    playwright install --with-deps
+    playwright install --with-deps --no-shell
 
 # Copy project files
 COPY . /app
+
+# Force headless mode in container
+ENV HEADLESS=1
+# Enable Telegram notifications
+ENV ENABLE_TELEGRAM=1
 
 CMD ["python", "main.py", "--no-interactive", "--config", "config.yaml"]

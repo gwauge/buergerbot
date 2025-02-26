@@ -1,0 +1,12 @@
+services:
+  buergerbot:
+    container_name: buergerbot
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: buergerbot:latest
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    volumes:
+      - ./config.yaml:/app/config.yaml
