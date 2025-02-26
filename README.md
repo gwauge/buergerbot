@@ -9,16 +9,27 @@ This script is provided as is and is intended for educational purposes only. Use
 - Telegram bot token (see [here](https://core.telegram.org/bots#6-botfather))
 
 ## Use with Docker (recommended)
+
+### Docker Compose
+1. Create `compose.yaml` file. See [compose.yaml](compose.yaml) for an example.
+2. Fill in `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID` environment variables or create a `.env` file.
+3. Create a `config.yaml` file. See [config.yaml.example](config.yaml.example) for an example and [Configuration](#configuration) for a detailed explanation of the configuration options.
+4. Run the Docker container:
+  ```bash
+  docker compose up
+  ```
+
+### Build image manually
 1. Clone the repository
 2. Build the Docker image:
   ```bash
   docker build -t buergerbot .
   ```
-3. Copy `.env.example` to `.env` and fill in the required information, specifically:
+1. Copy `.env.example` to `.env` and fill in the required information, specifically:
    - `TELEGRAM_TOKEN`: Your Telegram bot token
    - `TELEGRAM_CHAT_ID`: Your Telegram chat ID
-4. Copy `config.yaml.example` to `config.yaml`. See `config.yaml.example` for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
-5. Run the Docker container:
+2. Copy `config.yaml.example` to `config.yaml`. See `config.yaml.example` for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
+3. Run the Docker container:
   ```bash
   docker run \
     -it --rm \
