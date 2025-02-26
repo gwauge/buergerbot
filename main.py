@@ -468,6 +468,10 @@ def run(args: dict[str, any], config: Configuration) -> bool:
                     success = True
                     logger.info("Successfully booked appointment for %s %d, %d at %s",
                                 month_str, day, year, time_str)
+                    break
+
+                if success:
+                    break
 
             if not success:
                 continue_button = page.query_selector("button:has-text('Vorwärts')")
