@@ -160,72 +160,97 @@ config_schema = {
     "weekdays": {
         "type": "dict",
         "schema": {
-            "monday": {
-                "type": "list",
+            "available": {
+                "type": "dict",
                 "schema": {
-                    "type": "dict",
-                    "schema": {
-                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                    "monday": {
+                        "type": "list",
+                        "schema": {
+                            "type": "dict",
+                            "schema": {
+                                "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                                "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                            },
+                        },
+                        "default": []
                     },
+                    "tuesday": {
+                        "type": "list",
+                        "schema": {
+                            "type": "dict",
+                            "schema": {
+                                "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                                "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                            },
+                        },
+                        "default": []
+                    },
+                    "wednesday": {
+                        "type": "list",
+                        "schema": {
+                            "type": "dict",
+                            "schema": {
+                                "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                                "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                            },
+                        },
+                        "default": []
+                    },
+                    "thursday": {
+                        "type": "list",
+                        "schema": {
+                            "type": "dict",
+                            "schema": {
+                                "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                                "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                            },
+                        },
+                        "default": []
+                    },
+                    "friday": {
+                        "type": "list",
+                        "schema": {
+                            "type": "dict",
+                            "schema": {
+                                "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                                "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                            },
+                        },
+                        "default": []
+                    },
+                    "saturday": {
+                        "type": "list",
+                        "schema": {
+                            "type": "dict",
+                            "schema": {
+                                "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                                "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
+                            },
+                        },
+                        "default": []
+                    }
                 },
-                "default": []
-            },
-            "tuesday": {
-                "type": "list",
-                "schema": {
-                    "type": "dict",
-                    "schema": {
-                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                    },
+                "default": {
+                    "monday": [],
+                    "tuesday": [],
+                    "wednesday": [],
+                    "thursday": [],
+                    "friday": [],
+                    "saturday": []
                 },
-                "default": []
             },
-            "wednesday": {
+            "unavailable": {
                 "type": "list",
                 "schema": {
-                    "type": "dict",
-                    "schema": {
-                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                    },
-                },
-                "default": []
-            },
-            "thursday": {
-                "type": "list",
-                "schema": {
-                    "type": "dict",
-                    "schema": {
-                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                    },
-                },
-                "default": []
-            },
-            "friday": {
-                "type": "list",
-                "schema": {
-                    "type": "dict",
-                    "schema": {
-                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                    },
-                },
-                "default": []
-            },
-            "saturday": {
-                "type": "list",
-                "schema": {
-                    "type": "dict",
-                    "schema": {
-                        "from": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                        "to": {"type": "string", "regex": TIME_FORMAT_REGEX, "required": True},
-                    },
+                    "type": "string",
+                    "allowed": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
                 },
                 "default": []
             }
+        },
+        "default": {
+            "available": {},
+            "unavailable": []
         }
     },
     "dates": {

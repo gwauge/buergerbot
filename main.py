@@ -264,9 +264,9 @@ class Configuration:
         for request in config["requests"]:
             self.requests[request["id"]] = request["number_of_people"]
 
-        for weekday, times in config["weekdays"].items():
+        for weekday, times in config["weekdays"]["available"].items():
             # select whole day if empty
-            if not times:
+            if not times and weekday not in config["weekdays"]["unavailable"]:
                 self.weekdays[weekday] = [{"from": "00:00", "to": "23:59"}]
             else:
                 self.weekdays[weekday] = times

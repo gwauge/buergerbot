@@ -37,10 +37,10 @@ This script is provided as is and is intended for educational purposes only. Use
   ```bash
   docker build -t buergerbot .
   ```
-1. Copy `.env.example` to `.env` and fill in the required information, specifically:
+1. Copy [`.env.example`](.env.example) to `.env` and fill in the required information, specifically:
    - `TELEGRAM_TOKEN`: Your Telegram bot token
    - `TELEGRAM_CHAT_ID`: Your Telegram chat ID
-2. Copy `config.yaml.example` to `config.yaml`. See `config.yaml.example` for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
+2. Copy `config.yaml.example` to `config.yaml`. See [`config.yaml.example`](config.yaml.example) for an example. Also see [Configuration](#configuration) for a detailed explanation of the configuration options.
 3. Run the Docker container:
   ```bash
   docker run \
@@ -53,12 +53,12 @@ This script is provided as is and is intended for educational purposes only. Use
 
 ## Use without Docker
 ### Dependencies
-See `requirements.txt` for a list of required packages.
+See [`requirements.txt`](requirements.txt) for a list of required packages.
 
 ### Installation
 1. Clone the repository
-2. Run `install.sh` to create a virtual environment and install the required packages
-3. Copy `.env.example` to `.env` and fill in the required information
+2. Run [`install.sh`](install.sh) to create a virtual environment and install the required packages
+3. Copy [`.env.example`](.env.example) to `.env` and fill in the required information
 
 ### Usage
 1. Run `source venv/bin/activate` to activate the virtual environment
@@ -91,12 +91,21 @@ Optionally, a request type can also contain the following field:
 - `number_of_people`: The number of people for this request type. Default is 1.
 
 ### Weekdays
-The `weekdays` section should contain a key for each weekday that you would like to specify availability for. Each availability entry should contain the following keys:
+The `weekdays` section is split into two subsections.
+
+#### Available
+The `available` section should contain a key for each weekday that you would like to specify availability for. Each availability entry should contain the following keys:
 - `from`: The start time of the availability in the format `HH:MM`.
 - `to`: The end time of the availability in the format `HH:MM`.
 
 All other times during that time are considered unavailable.
-If a weekday is not specified, the script will assume that you are available all day.
+
+#### Unavailable
+The section `unavailable` should contain a list of days (as lowercase strings, e.g. "thursday") that you are unavailable.
+
+If a weekday is not specified in either section, the script will assume that you are available all day.
+
+**Note**: Availability supercedes non-availability. E.g., if you specify that you are available on Monday from 10:00-12:00 and unavailable on Monday, the script will assume that you are available on Monday from 10:00-12:00.
 
 ### Dates
 Inside the `dates` section, you can optionally specify a list of dates to be excluded in the format `YYYY-MM-DD` under the key `exclude`.
