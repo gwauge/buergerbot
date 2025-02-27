@@ -385,10 +385,11 @@ def run(args: dict[str, any], config: Configuration) -> bool:
 
                     # get weekday from parsed_date in lower case
                     weekday = parsed_date.strftime("%A").lower()
+                    month_str_localized = parsed_date.strftime("%B")
 
                     # log free day by using local date format: month, day year in local language
                     logger.debug("%s %d, %d: %d appointments available",
-                                 month_str, day, year, free)
+                                 month_str_localized, day, year, free)
 
                     # book appointment
                     if args.disable_booking:
@@ -431,15 +432,15 @@ def run(args: dict[str, any], config: Configuration) -> bool:
                     ok_button.click()
                     page.wait_for_load_state("networkidle")
 
+                    # enter personal data
+                    page.query_selector("#anrede").select_option(value=config.personal_data.foa.value)
+                    page.query_selector("input#vorname").fill(config.personal_data.first_name)
+                    page.query_selector("input#nachname").fill(config.personal_data.last_name)
+                    page.query_selector("input#telefon").fill(config.personal_data.phone)
+                    page.query_selector("input#email").fill(config.personal_data.email)
+
                     # while #cssconstants_captcha_image exists
                     while page.query_selector("#cssconstants_captcha_image"):
-
-                        # enter personal data
-                        page.query_selector("#anrede").select_option(value=config.personal_data.foa.value)
-                        page.query_selector("input#vorname").fill(config.personal_data.first_name)
-                        page.query_selector("input#nachname").fill(config.personal_data.last_name)
-                        page.query_selector("input#telefon").fill(config.personal_data.phone)
-                        page.query_selector("input#email").fill(config.personal_data.email)
 
                         # create captacha screenshot
                         captcha = page.locator("#cssconstants_captcha_image")
@@ -465,9 +466,26 @@ def run(args: dict[str, any], config: Configuration) -> bool:
                     # handle confirmation
                     page.query_selector("button#action_confirm_next").click()
                     page.wait_for_load_state("networkidle")
+
+                    if page.query_selector("#cssconstantspageheader").inner_text() != "Terminvereinbarung":
+                        logger.error("Booking appointment failed")
+                        success = True  # a little hacky, should be renamed to "done" or similar
+                        break
+
+                    # get Aufrufnummer, Terminnummer & Änderungspin
+                    aufrufnr = page.query_selector("div.blockcontentdatagrid:nth-child(6) > div:nth-child(3) > div.MDG_value").inner_text()
+                    terminnr = page.query_selector("div.blockcontentdatagrid:nth-child(6) > div:nth-child(4) > div.MDG_value").inner_text()
+                    aenderungspin = page.query_selector("div.blockcontentdatagrid:nth-child(6) > div:nth-child(5) > div.MDG_value").inner_text()
+
+                    # take screenshot of appointment confirmation and save to file
+                    form = page.locator("#idekolcontainer")
+                    form.wait_for(state="visible")
+                    form.screenshot(path="buchung.png")
+
                     success = True
-                    logger.info("Successfully booked appointment for %s %d, %d at %s",
-                                month_str, day, year, time_str)
+                    logger.info("Successfully booked appointment for %s %d, %d at %s\n\tAufrufnummer: %s\n\tTerminnummer: %s\n\tÄnderungspin: %s",
+                                month_str_localized, day, year, time_str,
+                                aufrufnr, terminnr, aenderungspin)
                     break
 
                 if success:

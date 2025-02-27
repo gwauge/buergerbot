@@ -1,9 +1,6 @@
 services:
   buergerbot:
     container_name: buergerbot
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: ghcr.io/gwauge/buergerbot:latest # GitHub Container Registry image
     # image: buergerbot:latest # Docker Hub image
     environment:
